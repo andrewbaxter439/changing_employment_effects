@@ -1,0 +1,134 @@
+---
+title: "Increasing employment rates"
+author: "Andy Baxter"
+format: html
+---
+
+```{r, setup}
+#| echo: false
+#| include: false
+
+here::here("increasing_employment_rates.qmd")
+
+library(reticulate)
+library(tidyverse)
+library(here)
+
+data <- readr::read_tsv(here("data/UK_2023_b1.txt"))
+
+euromod <- import("euromod")
+
+mod <- euromod$Model(here("UKMOD-PUBLIC-B2025.07"))
+```
+
+# Baseline runs
+
+```{r, baseline-runs}
+if (!dir.exists("output/baseline")) dir.create("output/baseline")
+
+walk(2026, \(year) {
+  policy_system <- mod$countries['UK']$systems[glue::glue("UK_{year}")]
+  policy_system$run(
+    data,
+    "UK_2023_b1.txt",
+    outputpath = here("output/baseline")
+  )
+}, .progress = TRUE)
+```
+
+# Identifying employment statuses
+
+```{r, employed-unemployed-subgroups}
+
+# Employed group, for calculating hours and wages
+sample_hours_wages <- data |> 
+  filter(les == 3) |> 
+  mutate(dag_grp = case_when(
+    dag >= 18 & dag < 25 ~ 1,
+    dag >= 25 & dag < 31 ~ 2,
+    dag >= 31 & dag < 51 ~ 3,
+    dag >= 51 & dag < 56 ~ 4,
+    dag >= 56 ~ 5
+  ),
+      ethnicity = case_when(
+        dot %in% 1:4 ~ "White",
+        dot %in% 5:8 ~ "Mixed",
+        dot %in% 9:13 ~ "Asian",
+        dot %in% 14:16 ~ "Black",
+        dot == 17 ~ "Other",
+        .default = "Missing"
+      )) |> 
+  summarise(
+    across(starts_with("lhw"), median),
+    yem = mean(yem),
+    n = n(),
+    .by = c(dag_grp, dgn, deh, dms, dhr, ethnicity, lcr01, lindi)
+  ) |> 
+  filter(lindi != -1)
+
+  
+replacement_workers <- data |> 
+  filter(les == 5, dag %in% 18:64, !is.na(dag)) |> 
+  mutate(dag_grp = case_when(
+    dag >= 18 & dag < 25 ~ 1,
+    dag >= 25 & dag < 31 ~ 2,
+    dag >= 31 & dag < 51 ~ 3,
+    dag >= 51 & dag < 56 ~ 4,
+    dag >= 56 ~ 5
+  ),
+      ethnicity = case_when(
+        dot %in% 1:4 ~ "White",
+        dot %in% 5:8 ~ "Mixed",
+        dot %in% 9:13 ~ "Asian",
+        dot %in% 14:16 ~ "Black",
+        dot %in% c(17, 97) ~ "Other",
+        .default = "Missing"
+      )) |> 
+  select(-starts_with("lhw"), -yem, -lindi) |> 
+  left_join(
+    sample_hours_wages,
+    by = join_by(dag_grp, dgn, deh, dms, dhr, ethnicity, lcr01)
+    ) |> 
+  replace_na(list(n = 1)) |> 
+  slice_sample(by = idperson, n = 1, weight_by = n) |> 
+  replace_na(
+    list(lhw = median(sample_hours_wages$lhw),
+         lhw01 = median(sample_hours_wages$lhw01),
+         lhw00 = median(sample_hours_wages$lhw00),
+         yem = median(sample_hours_wages$yem),
+         lindi = sample(sample_hours_wages$yem, size = 1, prob = sample_hours_wages$n))
+  ) |> 
+  select(-n, -ethnicity, -dag_grp)
+
+sample_workers <- 
+  slice_sample(replacement_workers, prop = 0.05)
+
+uprated_pop_5pc <- data |> 
+  filter(!(idperson %in% sample_workers$idperson)) |> 
+  bind_rows(sample_workers) |> 
+  arrange(idhh, idperson)
+
+write_tsv(uprated_pop_5pc, "data/updated_pop_5pc.txt")
+
+```
+
+# Run UKMOD for uprated pop
+
+```{r ukmod-uprated-pop-5pc}
+
+data_5pc <- read_tsv(here("data/updated_pop_5pc.txt"))
+
+if (!dir.exists("output/uprated_5pc")) dir.create("output/uprated_5pc")
+
+walk(2026, \(year) {
+  policy_system <- mod$countries['UK']$systems[glue::glue("UK_{year}")]
+  policy_system$run(
+    data_5pc,
+    "UK_2023_b1.txt",
+    outputpath = here("output/uprated_5pc")
+  )
+}, .progress = TRUE)
+
+```
+
+
