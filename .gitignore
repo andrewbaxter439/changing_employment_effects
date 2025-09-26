@@ -5,3 +5,5 @@
 
 data/
 UKMOD*
+output/**/*
+!output/.gitkeep
