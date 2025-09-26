@@ -1,6 +1,6 @@
 cffi==2.0.0
 clr_loader==0.2.7.post0
-euromod==0.2.14
+euromod==0.2.13
 numpy==2.3.3
 pandas==2.3.2
 polars==1.33.1
