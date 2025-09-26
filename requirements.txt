@@ -1,0 +1,14 @@
+cffi==2.0.0
+clr_loader==0.2.7.post0
+euromod==0.2.14
+numpy==2.3.3
+pandas==2.3.2
+polars==1.33.1
+pycparser==2.23
+python-dateutil==2.9.0.post0
+pythonnet==3.0.5
+pytz==2025.2
+setuptools==80.9.0
+six==1.17.0
+tzdata==2025.2
+wheel==0.45.1
