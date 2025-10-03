@@ -1,0 +1,228 @@
+---
+title: "Estimating amounts"
+format: html
+---
+
+```{r, setup}
+#| echo: false
+
+library(tidyverse)
+library(xml2)
+library(gt)
+
+# Read in labels
+statistics_page <- read_xml("UKMOD-PUBLIC-B2025.07/Statistics Presenter/UKMOD_1default.xml") 
+  
+labels_table <- xml_children(statistics_page)[3] |> 
+  xml_child() |> 
+  xml_child(6) |> 
+  xml_child(1) |> 
+  xml_find_all("Rows") |> 
+  xml_children() |> 
+  as_list() |> 
+  purrr::map_dfr(\(Row) {
+    
+    tibble::tibble(
+      variable = Row$CellAction$Parameters$Parameter$VarName[[1]],
+      label = Row$Name[[1]]
+    )
+    
+  }) |> 
+  mutate(order = row_number()) |> 
+  bind_rows(
+    tribble(~variable, ~label,
+            "bchmt_s", "Scottish Child Payment (including bridging, from 2020)",
+            "ils_sicdy",	"...... national insurance contributions (personal)",
+            "ils_sicer",	"...... National insurance contributions (employer)"
+            )
+  )
+
+means_tested_bens <- c(
+  "bsauc_s",
+  "brduc_s",
+  "bunmt_s",
+  "bsa_s",
+  "bsadi_s",
+  "boamt_s",
+  "boaht_s",
+  "bmu_s",
+  "bho_s",
+  "brd_s",
+  "bwkmt_s",
+  "bfamt_s",
+  "bmamt_s",
+  "bmamt01_s",
+  "bmascmt_s",
+  "bch_s",
+  "bchmt_s",
+  "bchmt01_s",
+  "bmascmt01_s",
+  "bched01_s",
+  "bched02_s",
+  "bhosc01_s",
+  "bsaec_s"
+)
+
+non_means_tested_bens <- c(
+  "bmact_s",
+  "bmanc_s",
+  "bpact_s",
+  "bunct_s",
+  "bchht_s",
+  "bcrdicm_s",
+  "bwkmcee_s",
+  "bwkmcse_s",
+  "bedes",
+  "bedsl",
+  "bdioa",
+  "bdisc",
+  "bdimb",
+  "bdiscwa",
+  "bdimbwa",
+  "bdict01",
+  "bdict02",
+  "bdiwi",
+  "bcrdi",
+  "bdisv",
+  "bhlwk",
+  "buntr",
+  "bot")
+
+non_means_pension <- c("boact_s", "boactcm", "boawr", "bsuwd")
+
+
+
+direct_taxes <- c(
+  "tin12_s",
+  "tin11_s",
+  "tin00_s",
+  "i_bmu_tmu"
+)
+
+ni_contributions <- c(
+  "ils_sicdy",
+  "ils_sicer"
+)
+
+```
+
+```{r calculating-amounts-by-year}
+
+snapshot_amounts <- function(data, year) {
+  
+  all_totals <- data |>
+    select(starts_with("b"), starts_with("i"), starts_with("ti"), dwt, -starts_with("id")) |> 
+    # select(any_of(labels_table$variable), dwt) |> 
+  summarise(across(everything(), ~sum(.x * dwt, na.rm = TRUE) * 12)) |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "gbp") |> 
+  left_join(labels_table, by = "variable") |> 
+  mutate(Benefit = label, Amount = scales::label_currency(prefix = "£")(gbp)) |> 
+  mutate(gbp = if_else(str_detect(Benefit, "\\(-\\)"), -gbp, gbp)) |> 
+  arrange(order) |> 
+  replace_na(list(gbp = 0))
+
+means_tot <- all_totals |> 
+  filter(variable %in% means_tested_bens) |> 
+  summarise(Expenditure__Means_tested_benefits = sum(gbp)) 
+
+non_means_tot <- all_totals |> 
+  filter(variable %in% non_means_tested_bens) |> 
+  summarise(Expenditure__Non_means_tested_benefits = sum(gbp)) 
+
+pension_out_tot <- all_totals |> 
+  filter(variable %in% non_means_pension) |> 
+  summarise(Expenditure__pensions  = sum(gbp)) 
+
+direct_taxes_tot <- all_totals |> 
+  filter(variable %in% direct_taxes) |> 
+  summarise(Revenue__Direct_taxes = sum(gbp))
+
+ni_contributions_tot <- all_totals |> 
+  filter(variable %in% ni_contributions) |> 
+  summarise(Revenue__NI_contributions = sum(gbp)) 
+
+
+bind_cols(
+  tibble(Year = year),
+  means_tot,
+  non_means_tot,
+  pension_out_tot,
+  direct_taxes_tot,
+  ni_contributions_tot
+) |> 
+  pivot_longer(-Year, names_to = "calc", values_to = "gbp") |> 
+  mutate(Amount = scales::label_currency(prefix = "£")(gbp))
+
+  
+}
+
+add_currency <- function(amt) {
+  
+  str_remove_all(amt, "[^\\d]") |>
+    as.numeric() |>  
+    sum() |> 
+    (\(x) scales::label_currency(prefix = "£")(x))()
+}
+
+diff_currency <- function(amt) {
+  
+  str_remove_all(amt, "[^\\d]") |>
+    as.numeric() |>  
+    diff(2) |> 
+    (\(x) scales::label_currency(prefix = "£")(x))()
+}
+
+```
+
+# Estimating baseline amounts
+
+```{r baseline-estimates}
+
+baselines <- dir("output/baseline", full.names = TRUE) |> 
+  map(\(filename) {
+    list(
+      year = str_extract(filename, "\\d+"),
+      data = data.table::fread(filename, sep = "\t", data.table = FALSE) |> as_tibble()
+    )
+  })
+
+baseline_amounts_calc <- baselines |> 
+  map(~snapshot_amounts(.x[[2]], .x[[1]])) |> 
+  reduce(bind_rows) 
+
+baseline_amounts_calc |> 
+  select(-gbp) |> 
+  pivot_wider(names_from = Year, values_from = Amount) |> 
+  separate_wider_delim(calc, delim = "__", names = c("cat", "source")) |>  
+  mutate(source = str_replace_all(source, "_", " ")) |> 
+  gt(rowname_col = "source", groupname_col = "cat") |> 
+  summary_rows(
+    # cols = `2026`:`2029`,
+    fns = list(
+      Total = ~add_currency(.x)
+    )
+  ) |> 
+  grand_summary_rows(
+    fns = list(
+      `Total in - out` = ~diff_currency(.x)
+    )
+  )
+  
+```
+
+
+```{r over-25-seeking}
+u25_seeking <- dir("output/uprated_seeking_u25_5pc", full.names = TRUE) |> 
+  map(\(filename) {
+    list(
+      year = str_extract(filename, "\\d+"),
+      data = data.table::fread(filename, sep = "\t", data.table = FALSE) |> as_tibble()
+    )
+  })
+
+
+u25_seeking_amounts_calc <- u25_seeking |> 
+  map(~snapshot_amounts(.x[[2]], .x[[1]])) |> 
+  reduce(bind_rows) 
+```
+

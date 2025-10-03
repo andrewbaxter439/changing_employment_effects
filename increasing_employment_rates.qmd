@@ -13,8 +13,45 @@ here::here("increasing_employment_rates.qmd")
 library(reticulate)
 library(tidyverse)
 library(here)
+library(fixest)
 
-data <- readr::read_tsv(here("data/UK_2023_b1.txt"))
+raw_data <- readr::read_tsv(here("data/UK_2023_b1.txt"))
+
+data <- raw_data |> 
+  ## Group ages and ethnicity_collapsed
+  mutate(
+    age_collapsed = case_when(
+      dag >= 16 & dag < 25 ~ 1,
+      dag >= 25 & dag < 31 ~ 2,
+      dag >= 31 & dag < 51 ~ 3,
+      dag >= 51 & dag < 56 ~ 4,
+      dag >= 56 ~ 5
+    ),
+    ethnicity_collapsed = case_when(
+      dot %in% 1:4 ~ "White",
+      dot %in% 5:8 ~ "Mixed",
+      dot %in% 9:13 ~ "Asian",
+      dot %in% 14:16 ~ "Black",
+      dot == 17 ~ "Other",
+      .default = "Missing"
+    ),
+    dms_collapsed = case_when(
+      dms == 1 ~ "single",
+      dms == 2 ~ "married",
+      dms %in% 3:5 ~ "separated",
+      .default = "single"
+    ),
+  ) |> 
+    mutate(n_ch = sum(dag < 17), .by = idhh) |> 
+  mutate(n_ch = case_when(
+    n_ch == 0 ~ "0",
+    n_ch == 1 ~ "1",
+    n_ch > 1 ~ "2+"
+  ), unemployed = case_when(
+    les == 3 ~ 0L,
+    les %in% c(5, 7, 8) ~ 1L,
+    .default = NA_integer_
+  ))
 
 euromod <- import("euromod")
 
@@ -38,37 +75,25 @@ walk(2026:2029, \(year) {
 
 # Identifying employment statuses
 
-```{r, employed-unemployed-subgroups}
+## Option 1 - matching
 
+```{r, employed-unemployed-subgroups-by-match}
+
+employed_pop <- data |>
+  ## All employed
+  filter(les == 3)
+
+not_in_employment_pop <-  data |>
+  ## Select unemployed, inactive, sick or disabled, working age
+  filter(les %in% c(5, 7, 8), dag %in% 16:64, !is.na(dag)) |>
+  mutate(
+    seeking = les == 5,
+    sick_or_disabled = les == 8,
+    under_25 = age_collapsed == 1
+  )
 
 # Employed group, for calculating hours and wages
-sample_hours_wages <- data |>
-  ## All employed
-  filter(les == 3) |>
-  ## Group ages and ethnicity_collapsed
-  mutate(
-    age_collapsed = case_when(
-      dag >= 16 & dag < 25 ~ 1,
-      dag >= 25 & dag < 31 ~ 2,
-      dag >= 31 & dag < 51 ~ 3,
-      dag >= 51 & dag < 56 ~ 4,
-      dag >= 56 ~ 5
-    ),
-    ethnicity_collapsed = case_when(
-      dot %in% 1:4 ~ "White",
-      dot %in% 5:8 ~ "Mixed",
-      dot %in% 9:13 ~ "Asian",
-      dot %in% 14:16 ~ "Black",
-      dot == 17 ~ "Other",
-      .default = "Missing"
-    ),
-    dms_collapsed = case_when(
-      dms == 1 ~ "single",
-      dms == 2 ~ "married",
-      dms %in% 3:5 ~ "separated",
-      .default = "single"
-    )
-  ) |>
+sample_hours_wages <- employed_pop |>
   ## Take median hours, mean wages, mean disposable income, weight by counts
   summarise(
     lhw = median(lhw),
@@ -83,32 +108,7 @@ sample_hours_wages <- data |>
   filter(lindi != -1, yem != 0, lhw != 0)
 
 
-replacement_workers <- data |> 
-  ## Select unemployed, inactive, sick or disabled, working age
-  filter(les %in% c(5, 7, 8), dag %in% 16:64, !is.na(dag)) |> 
-  mutate(
-    age_collapsed = case_when(
-      dag >= 16 & dag < 25 ~ 1,
-      dag >= 25 & dag < 31 ~ 2,
-      dag >= 31 & dag < 51 ~ 3,
-      dag >= 51 & dag < 56 ~ 4,
-      dag >= 56 ~ 5
-    ),
-    ethnicity_collapsed = case_when(
-      dot %in% 1:4 ~ "White",
-      dot %in% 5:8 ~ "Mixed",
-      dot %in% 9:13 ~ "Asian",
-      dot %in% 14:16 ~ "Black",
-      dot == 17 ~ "Other",
-      .default = "Missing"
-    ),
-    dms_collapsed = case_when(
-      dms == 1 ~ "single",
-      dms == 2 ~ "married",
-      dms %in% 3:5 ~ "separated",
-      .default = "single"
-    )
-  ) |>
+replacement_workers <- not_in_employment_pop |>
   # Leave out variables to be imputed
   select(-lhw, -lhw00, -yem, -yds, -lindi) |> 
   left_join(
@@ -125,14 +125,127 @@ replacement_workers <- data |>
          lindi = sample(sample_hours_wages$lindi, size = 1, prob = sample_hours_wages$n))
   ) |> 
   mutate(
-    seeking = les == 5,
-    sick_or_disabled = les == 8,
-    under_25 = age_collapsed == 1,
     les = 3,
     ) |> 
   select(-n, -ethnicity_collapsed, -age_collapsed, -dms_collapsed)
 
 ```
+
+## Option 2 - predictor models
+
+```{r}
+
+
+
+lhw_mod <- employed_pop |> feols(
+  lhw ~ age_collapsed + dgn + i(deh) +  n_ch +
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1),
+  data = _
+)
+
+
+yem_mod <- employed_pop |> feols(
+  yem ~ age_collapsed + dgn + i(deh) + n_ch +
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1) +
+    lhw,
+  data = _
+)
+
+yds_mod <- employed_pop |> feols(
+  yds ~ age_collapsed + dgn + i(deh) +  n_ch +
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1) +
+    lhw + yem,
+  data = _
+)
+
+bch_mod <- employed_pop |> feols(
+  bch ~ age_collapsed + dgn + i(deh) + n_ch + 
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1) +
+    lhw + yem + yds,
+  data = _
+)
+
+bsa_mod <- employed_pop |> feols(
+  bsa ~ age_collapsed + dgn + i(deh) +  n_ch + 
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1) +
+    lhw + yem + yds,
+  data = _
+)
+
+bho_mod <- employed_pop |> feols(
+  bho ~ age_collapsed + dgn + i(deh) +  n_ch +
+    dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + i(drgn1) +
+    lhw + yem + yds,
+  data = _
+)
+
+predict_new <- function(in_data, outcome) {
+  mutate(in_data, {{outcome}} := predict(get(glue::glue("{outcome}_mod")), newdata = in_data))
+}
+
+
+imputed_pop <- not_in_employment_pop |>
+  select(-lhw, -yem, -yds, -bch, -bsa, -bho) |>
+  predict_new("lhw") |>
+  predict_new("yem") |>
+  predict_new("yds") |>
+  predict_new("bch") |>
+  predict_new("bsa") |>
+  predict_new("bho") |>
+  mutate(les = 3)
+
+imputed_pop |> 
+  select(lhw, yem, yds, bch, bsa, bho) |> 
+  summary()
+```
+
+
+
+```{r}
+
+employed_pop |> 
+  select(lhw, yem, yds, bch, bsa, bho) |> 
+  summary()
+
+```
+
+## Option 3 - propensity score matching?
+
+```{r}
+library(MatchIt)
+
+set.seed(150)
+
+matched_pop <- data |>
+  filter(!is.na(unemployed), dag %in% 16:64, !is.na(dag)) |>
+  mutate(deh = factor(deh), drgnl = factor(drgn1)) |>
+  matchit(
+    unemployed ~ age_collapsed + dgn + deh +  n_ch +
+      dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + drgn1,
+    data = _
+  )
+
+new_vals <- get_matches(matched_pop) |> 
+   select(id, subclass, idperson, unemployed, les, lhw, yem, yds, bch, bsa, bho, lindi, lfs) |> 
+  mutate(id_unemployed = idperson[unemployed == 1], .by = "subclass") |> 
+  filter(unemployed == 0) |> 
+  mutate(idperson = id_unemployed) |> 
+  select(-id, -subclass, -id_unemployed)
+
+
+replacement_workers <- not_in_employment_pop |>
+  # Leave out variables to be imputed
+  select(-c(les, lhw, yem, yds, bch, bsa, bho, lindi, lfs)) |> 
+  left_join(
+    new_vals,
+    by = "idperson"
+    ) |> 
+  select(-ethnicity_collapsed, -age_collapsed, -dms_collapsed, -n_ch)
+
+
+```
+
+
 
 ## Create samples
 
@@ -164,27 +277,27 @@ sample_workers_sick_or_disabled_u25 <- replacement_workers |>
 sample_workers_sick_or_disabled_o25 <- replacement_workers |> 
   slice_weighted_sample(sick_or_disabled, !under_25)
 
-uprated_pop_5pc <- data |> 
+uprated_pop_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking$idperson)) |> 
   bind_rows(sample_workers_seeking) |> 
   arrange(idhh, idperson)
 
-uprated_seeking_u25_5pc <- data |> 
+uprated_seeking_u25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking_u25$idperson)) |> 
   bind_rows(sample_workers_seeking_u25) |> 
   arrange(idhh, idperson)
 
-uprated_seeking_o25_5pc <- data |> 
+uprated_seeking_o25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking_o25$idperson)) |> 
   bind_rows(sample_workers_seeking_o25) |> 
   arrange(idhh, idperson)
 
-uprated_sick_or_disabled_u25_5pc <- data |> 
+uprated_sick_or_disabled_u25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_sick_or_disabled_u25$idperson)) |> 
   bind_rows(sample_workers_sick_or_disabled_u25) |> 
   arrange(idhh, idperson)
 
-uprated_sick_or_disabled_o25_5pc <- data |> 
+uprated_sick_or_disabled_o25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_sick_or_disabled_o25$idperson)) |> 
   bind_rows(sample_workers_sick_or_disabled_o25) |> 
   arrange(idhh, idperson)
