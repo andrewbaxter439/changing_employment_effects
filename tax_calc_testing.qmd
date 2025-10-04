@@ -1,25 +1,31 @@
 ---
 title: "Estimating amounts"
-format: html
+format:
+  docx:
+    toc: true
+    number-sections: true
+execute:
+  echo: false
+  message: false
+  warning: false
 ---
 
 ```{r, setup}
 #| echo: false
 
 library(tidyverse)
-library(xml2)
 library(gt)
 
 # Read in labels
-statistics_page <- read_xml("UKMOD-PUBLIC-B2025.07/Statistics Presenter/UKMOD_1default.xml") 
+statistics_page <- xml2::read_xml("UKMOD-PUBLIC-B2025.07/Statistics Presenter/UKMOD_1default.xml") 
   
-labels_table <- xml_children(statistics_page)[3] |> 
-  xml_child() |> 
-  xml_child(6) |> 
-  xml_child(1) |> 
-  xml_find_all("Rows") |> 
-  xml_children() |> 
-  as_list() |> 
+labels_table <- xml2::xml_children(statistics_page)[3] |> 
+  xml2::xml_child() |> 
+  xml2::xml_child(6) |> 
+  xml2::xml_child(1) |> 
+  xml2::xml_find_all("Rows") |> 
+  xml2::xml_children() |> 
+  xml2::as_list() |> 
   purrr::map_dfr(\(Row) {
     
     tibble::tibble(
@@ -156,20 +162,63 @@ bind_cols(
   
 }
 
+format_gbp <- function(amt) {
+  scales::label_currency(prefix = "£", suffix = "m")(amt / 1000000)
+}
+
 add_currency <- function(amt) {
   
   str_remove_all(amt, "[^\\d]") |>
     as.numeric() |>  
     sum() |> 
-    (\(x) scales::label_currency(prefix = "£")(x))()
+    format_gbp()
+  
 }
 
-diff_currency <- function(amt) {
+diff_currency <- function(amt, sign = "") {
+  amt |>
+    str_replace("m", ",000,000") |>
+    str_remove_all("[^\\d]") |>
+    as.numeric() |>
+    diff() |>
+    format_gbp() |> 
+    paste0(sign, x = _)
   
-  str_remove_all(amt, "[^\\d]") |>
-    as.numeric() |>  
-    diff(2) |> 
-    (\(x) scales::label_currency(prefix = "£")(x))()
+}
+
+
+read_in_pop <- function(dirname, label) {
+  dir(file.path("output", dirname), full.names = TRUE) |>
+    map(\(filename) {
+      list(
+        year = str_extract(filename, "\\d{4,4}"),
+        data = data.table::fread(filename, sep = "\t", data.table = FALSE) |> as_tibble()
+      )
+    }) |>
+    map( ~ snapshot_amounts(.x[[2]], .x[[1]])) |>
+    reduce(bind_rows) |>
+    mutate(comparison = label)
+}
+
+formatted_table <- function(comparison_data) {
+  bind_rows(baseline_amounts_calc, comparison_data) |>
+    separate_wider_delim(calc, delim = "__", names = c("cat", "source")) |>
+    summarise(gbp = sum(gbp), .by = c(Year, cat, comparison)) |>
+    pivot_wider(names_from = cat, values_from = gbp) |>
+    gt(groupname_col = "Year", rowname_col = "comparison") |>
+    fmt_currency(currency = currency(default = "£"), suffixing =  c(NA, "M", NA, NA)) |>
+  tab_options(
+    summary_row.background.color = "lightgrey",
+    grand_summary_row.background.color = "lightgrey"
+  ) |>
+    summary_rows(
+      fns = list(label = "Annual difference", fn = "diff"),
+      fmt = ~ fmt_currency(
+        .x,
+        currency = currency(default = "£"),
+        suffixing =  c(NA, "M", NA, NA)
+      )
+    )
 }
 
 ```
@@ -188,41 +237,70 @@ baselines <- dir("output/baseline", full.names = TRUE) |>
 
 baseline_amounts_calc <- baselines |> 
   map(~snapshot_amounts(.x[[2]], .x[[1]])) |> 
-  reduce(bind_rows) 
+  reduce(bind_rows) |> 
+  mutate(comparison = "Baseline")
 
 baseline_amounts_calc |> 
-  select(-gbp) |> 
+  # mutate(Amount = format_gbp(gbp)) |> 
+  mutate(Amount = gbp) |> 
+  select(-gbp, -comparison) |> 
   pivot_wider(names_from = Year, values_from = Amount) |> 
   separate_wider_delim(calc, delim = "__", names = c("cat", "source")) |>  
   mutate(source = str_replace_all(source, "_", " ")) |> 
   gt(rowname_col = "source", groupname_col = "cat") |> 
+  fmt_currency(currency = currency(default = "£"), suffixing = TRUE) |> 
+    tab_options(
+    summary_row.background.color = "lightgrey",
+    grand_summary_row.background.color = "lightgrey"
+  ) |>
   summary_rows(
     # cols = `2026`:`2029`,
     fns = list(
-      Total = ~add_currency(.x)
-    )
+      label = "Total",
+      fn = "sum"
+    ),
+    fmt = ~fmt_currency(.x, currency = currency(default = "£"), suffixing = c(NA, "M", NA, NA))
   ) |> 
   grand_summary_rows(
     fns = list(
-      `Total in - out` = ~diff_currency(.x)
-    )
+      label = "Total in - out") ~-diff(.x),
+    fmt = ~fmt_currency(.x, currency = currency(default = "£"), suffixing = c(NA, "M", NA, NA))
   )
   
 ```
 
+# Under 25 and seeking work
 
-```{r over-25-seeking}
-u25_seeking <- dir("output/uprated_seeking_u25_5pc", full.names = TRUE) |> 
-  map(\(filename) {
-    list(
-      year = str_extract(filename, "\\d+"),
-      data = data.table::fread(filename, sep = "\t", data.table = FALSE) |> as_tibble()
-    )
-  })
+```{r under-25-seeking}
 
+read_in_pop("uprated_seeking_u25_5pc", "Under-25s - 5% increase") |> 
+  formatted_table()
 
-u25_seeking_amounts_calc <- u25_seeking |> 
-  map(~snapshot_amounts(.x[[2]], .x[[1]])) |> 
-  reduce(bind_rows) 
 ```
 
+# Under 25 and sick or disabled
+
+```{r under-25-dlltsd}
+
+read_in_pop("uprated_sick_or_disabled_u25_5pc", "Under-25s, sick or disabled - 5% increase") |> 
+  formatted_table()
+
+```
+
+# 25 or over and seeking work
+
+```{r over-25-seeking}
+
+read_in_pop("uprated_seeking_o25_5pc", "Aged 25-64 - 5% increase") |> 
+  formatted_table()
+
+```
+
+# 25 or over and sick or disabled
+
+```{r over-25-dlltsd}
+
+read_in_pop("uprated_sick_or_disabled_o25_5pc", "Aged 25-64, sick or disabled - 5% increase") |> 
+  formatted_table()
+
+```

@@ -13,3 +13,4 @@ output/**/*
 .quarto
 *_files/
 *.html
+*.docx

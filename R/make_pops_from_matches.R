@@ -1,4 +1,5 @@
-## ----setup---------------------------------------------------------------------------------------------------------------------------
+
+# Read in data ------------------------------------------------------------
 
 here::here("increasing_employment_rates.qmd")
 
@@ -6,13 +7,14 @@ library(reticulate)
 library(tidyverse)
 library(here)
 library(fixest)
-library(MatchIt)
 
 set.seed(150)
 
+
 raw_data <- readr::read_tsv(here("data/UK_2023_b1.txt"))
 
-data <- raw_data |> 
+
+data <- raw_data |>
   ## Group ages and ethnicity_collapsed
   mutate(
     age_collapsed = case_when(
@@ -36,25 +38,23 @@ data <- raw_data |>
       dms %in% 3:5 ~ "separated",
       .default = "single"
     ),
-  ) |> 
-    mutate(n_ch = sum(dag < 17), .by = idhh) |> 
-  mutate(n_ch = case_when(
-    n_ch == 0 ~ "0",
-    n_ch == 1 ~ "1",
-    n_ch > 1 ~ "2+"
-  ), unemployed = case_when(
-    les == 3 ~ 0L,
-    les %in% c(5, 7, 8) ~ 1L,
-    .default = NA_integer_
-  ))
-
-euromod <- import("euromod")
-
-mod <- euromod$Model(here("UKMOD-PUBLIC-B2025.07"))
+    deh_c3 = fct_collapse(
+      factor(deh),
+      "Low" = c(0:1),
+      "Med" = c(2:4),
+      "High" = 5
+    ),
+    enter_employment = 0
+  ) |>
+  mutate(n_ch = sum(dag < 17), .by = idhh) |>
+  mutate(
+    n_ch = case_when(n_ch == 0 ~ "0", n_ch == 1 ~ "1", n_ch > 1 ~ "2+"),
+    unemployed = case_when(les == 3 ~ 0L, les %in% c(5, 7, 8) ~ 1L, .default = NA_integer_)
+  )
 
 employed_pop <- data |>
   ## All employed
-  filter(les == 3)
+  filter(les == 3, yem != 0, lhw != 0)
 
 not_in_employment_pop <-  data |>
   ## Select unemployed, inactive, sick or disabled, working age
@@ -62,37 +62,74 @@ not_in_employment_pop <-  data |>
   mutate(
     seeking = les == 5,
     sick_or_disabled = les == 8,
-    under_25 = age_collapsed == 1
+    under_25 = age_collapsed == 1,
+    enter_employment = 1
   )
 
-## - Find matches --------------------------------------------------------------------------------------------------------
 
-matched_pop <- data |>
-  filter(!is.na(unemployed), dag %in% 16:64, !is.na(dag)) |>
-  mutate(deh = factor(deh), drgnl = factor(drgn1)) |>
-  matchit(
-    unemployed ~ age_collapsed + dgn + deh +  n_ch +
-      dms_collapsed + dhr + ethnicity_collapsed + lcr01 + ddi03 + drgn1,
-    data = _
+
+
+# progressive matching ----------------------------------------------------
+
+
+matches <- employed_pop |>
+  select(
+    les,
+    lhw,
+    yem,
+    yds,
+    bch,
+    bsa,
+    bho,
+    lindi,
+    lfs,
+    age_collapsed, # age group
+    dgn, # gender
+    deh_c3, # education - 3 cat
+    dms_collapsed, # marital status
+    n_ch, # n kids (0, 1, or 2+)
+    drgn1, # area
+    dhr, # home responsible
+    ddi03, # disabled
+    lcr01,  # carer
+    ethnicity_collapsed, # ethnicity
   )
 
-new_vals <- get_matches(matched_pop) |> 
-   select(id, subclass, idperson, unemployed, les, lhw, yem, yds, bch, bsa, bho, lindi, lfs) |> 
-  mutate(id_unemployed = idperson[unemployed == 1], .by = "subclass") |> 
-  filter(unemployed == 0) |> 
-  mutate(idperson = id_unemployed) |> 
-  select(-id, -subclass, -id_unemployed)
+unmatched_pop <- not_in_employment_pop |>
+  select(-c(les, lhw, yem, yds, bch, bsa, bho, lindi, lfs))
+
+find_matches <- function(unmatched_pop, matches = matches) {
+  
+  if(nrow(unmatched_pop) == 0) {
+    return(unmatched_pop)
+  }
+  
+  cat("Still to match", nrow(unmatched_pop), "rows\n")
+  
+  if(!("age_collapsed" %in% colnames(matches))) {
+    browser()
+    stop("No more matches to be found!")
+  }
+  
+  rolling_match <- unmatched_pop |> 
+    left_join(matches) 
+  
+  matched <- rolling_match |> 
+    filter(n() >=5, .by = idperson)
+  
+  matched |> 
+    bind_rows(
+      unmatched_pop |>
+        filter(!(idperson %in% matched$idperson)) |> 
+        find_matches(matches |> select(-last_col()))
+    )
+}
+
+output_matches <- find_matches(unmatched_pop, matches)
 
 
-replacement_workers <- not_in_employment_pop |>
-  # Leave out variables to be imputed
-  select(-c(les, lhw, yem, yds, bch, bsa, bho, lindi, lfs)) |> 
-  left_join(
-    new_vals,
-    by = "idperson"
-    ) |> 
-  select(-ethnicity_collapsed, -age_collapsed, -dms_collapsed, -n_ch)
-
+replacement_workers <- output_matches |> 
+  slice_sample(n = 1, by = idperson)
 
 ## ----create-samples------------------------------------------------------------------------------------------------------------------
 
@@ -147,10 +184,10 @@ uprated_sick_or_disabled_o25_5pc <- raw_data |>
   bind_rows(sample_workers_sick_or_disabled_o25) |> 
   arrange(idhh, idperson)
 
-write_tsv(uprated_pop_5pc, "data/updated_pop_5pc.txt")
-write_tsv(uprated_pop_5pc, "data/updated_pop_seeking_u25_5pc.txt")
-write_tsv(uprated_pop_5pc, "data/updated_pop_seeking_o25_5pc.txt")
-write_tsv(uprated_pop_5pc, "data/updated_pop_sick_or_disabled_u25_5pc.txt")
-write_tsv(uprated_pop_5pc, "data/updated_pop_sick_or_disabled_o25_5pc.txt")
+write_tsv(uprated_pop_5pc, "data/matching_updated_pop_5pc.txt")
+write_tsv(uprated_seeking_u25_5pc, "data/matching_updated_pop_seeking_u25_5pc.txt")
+write_tsv(uprated_seeking_o25_5pc, "data/matching_updated_pop_seeking_o25_5pc.txt")
+write_tsv(uprated_sick_or_disabled_u25_5pc, "data/matching_updated_pop_sick_or_disabled_u25_5pc.txt")
+write_tsv(uprated_sick_or_disabled_o25_5pc, "data/matching_updated_pop_sick_or_disabled_o25_5pc.txt")
 
 
