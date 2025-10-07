@@ -1,3 +1,16 @@
+args <- commandArgs(trailingOnly = FALSE)
+
+if ("--seed" %in% args) {
+  seed <- as.integer(args[which(args == "--seed") + 1])
+  cat("setting seed to ", seed, "\n")
+  set.seed(seed)
+} else if ("-s" %in% args){
+  seed <- as.integer(args[which(args == "-s") + 1])
+  cat("setting seed to ", seed, "\n")
+  set.seed(seed)
+} else {
+  set.seed(150)
+}
 
 # Read in data ------------------------------------------------------------
 
@@ -8,7 +21,6 @@ library(tidyverse)
 library(here)
 library(fixest)
 
-set.seed(150)
 
 
 raw_data <- readr::read_tsv(here("data/UK_2023_b1.txt"))
