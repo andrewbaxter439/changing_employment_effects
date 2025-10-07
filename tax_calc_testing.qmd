@@ -230,7 +230,24 @@ formatted_table <- function(comparison_data) {
 
 ```{r read-in-numbers-employed}
 
+matched_pop_in <- dir("data", pattern = "matching_updated_pop.*") |> 
+  set_names() |> 
+  map(~read_tsv(file.path("data", .x), col_select = c("enter_employment", "dwt")))
 
+n_workers <- matched_pop_in |> 
+  map(\(dt) {
+    summarise(dt, n_entering_employment = sum(enter_employment * dwt, na.rm = TRUE))
+  }) |> 
+  imap_dfr(~tibble(filename = .y, n_workers = .x$n_entering_employment)) |> 
+  inner_join(
+    tribble(~filename, ~comparison,
+            "matching_updated_pop_seeking_u25_5pc.txt", "Under-25s - 5% increase",
+            "matching_updated_pop_sick_or_disabled_u25_5pc.txt", "Under-25s, sick or disabled - 5% increase",
+            "matching_updated_pop_seeking_o25_5pc.txt", "Aged 25-64 - 5% increase",
+            "matching_updated_pop_sick_or_disabled_o25_5pc.txt", "Aged 25-64, sick or disabled - 5% increase",
+    )
+  ) |> 
+  select(comparison, n_workers)
 
 ```
 
@@ -345,7 +362,8 @@ total_cals <- bind_rows(
   separate_wider_delim(calc, delim = "__", names = c("direction", "cat")) |> 
   summarise(difference = sum(difference), .by = c("Year", "direction", "comparison")) |> 
   pivot_wider(names_from = c("direction"), values_from = difference) |> 
-  mutate(Total = Revenue - Expenditure) 
+  mutate(Total = Revenue - Expenditure) |> 
+  left_join(n_workers)
 
 total_cals |> 
   pivot_wider(names_from = Year, values_from = c(Expenditure, Revenue, Total)) |> 
@@ -364,6 +382,25 @@ total_cals |>
 )
 
 ```
+
+Increased income per person:
+
+```{r}
+total_cals |> 
+  select(Year, comparison, Total, `Persons entering work` = n_workers) |> 
+  mutate(`Change per person` = Total/`Persons entering work`) |> 
+  pivot_wider(names_from = Year, values_from = c(Total, `Change per person`),
+              id_cols = c(`Persons entering work`, comparison)) |> 
+  select(comparison, ends_with("2026"),
+         ends_with("2027"),
+         ends_with("2028"),
+         ends_with("2029")) |> 
+  gt(rowname_col = "comparison") |> 
+  tab_spanner_delim("_", reverse = TRUE) |> 
+  fmt_currency(currency = currency(default = "£"), decimals = 0, suffixing =  c(NA, "M", NA, NA))
+  
+```
+
 
 ## Totals
 
@@ -411,37 +448,34 @@ total_cals |>
 # Estimating costs
 
 ```{r}
-matched_pop_in <- dir("data", pattern = "matching_updated_pop.*", full.names = TRUE) |> 
-  set_names() |> 
-  map(~read_tsv(.x, col_select = c("enter_employment", "dwt")))
+
 
 costs_per_person <- tribble(
   ~age_group, ~employment_status, ~cost,
-  "Under-25", "Unemployed, looking for work", ~7000,
-  "Under-25", "Sick or disabled", ~7000,
-  "25-64", "Unemployed, looking for work", ~7000,
-  "25-64", "Sick or disabled", ~7000,
+  "Under-25", "Unemployed, looking for work", 8369,
+  "Under-25", "Sick or disabled", 8369,
+  "25-64", "Unemployed, looking for work", 8369,
+  "25-64", "Sick or disabled", 8369,
 )
 
-matched_pop_in |> 
-  map(\(dt) {
-    summarise(dt, n_entering_employment = sum(enter_employment * dwt, na.rm = TRUE))
-  }) |> 
-  imap_dfr(~tibble(population = .y, n_workers = .x$n_entering_employment)) |> 
-  mutate(
-    age_group = case_when(
-      str_detect(population, "u25") ~ "Under-25",
-      str_detect(population, "o25") ~ "25-64"
-    ),
-    employment_status = case_when(
-      str_detect(population, "seeking") ~ "Unemployed, looking for work",
-      str_detect(population, "sick_or_disabled") ~ "Sick or disabled"
-    ),
-    cost_of_program = 7000,
-    total_cost = n_workers * cost_of_program
-    ) |> 
-  filter(!is.na(age_group)) |> 
-  select(age_group, employment_status, n_workers, cost_of_program, total_cost)
+costs_per_person <- tribble(~cost, ~comparison,
+        8369, "Under-25s - 5% increase",
+        8369, "Under-25s, sick or disabled - 5% increase",
+        8369, "Aged 25-64 - 5% increase",
+        8369, "Aged 25-64, sick or disabled - 5% increase",
+)
+
+n_workers |>
+  left_join(costs_per_person) |>
+  mutate(`Total cost of program` = n_workers * cost, n_workers = round(n_workers)) |>
+  left_join(total_cals |>
+              summarise(`Total savings` = sum(Total), .by = comparison)) |> 
+  select(comparison, `Number of people returning to work` = n_workers, `Cost per person` = cost,
+         `Total cost of program`, `Total savings`) |> 
+  gt(rowname_col = "comparison") |> 
+  fmt_currency(currency = currency(default = "£"), decimals = 0, suffixing =  c(NA, "M", NA, NA), columns = -`Number of people returning to work`)  |> 
+  fmt_number(columns = `Number of people returning to work`, decimals = FALSE)
+  
 
 ```
 

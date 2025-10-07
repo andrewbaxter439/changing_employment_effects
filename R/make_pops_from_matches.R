@@ -147,40 +147,55 @@ slice_weighted_sample <- function(data = replacement_workers, ..., prop = 0.05) 
 sample_workers_seeking <- replacement_workers |>
   slice_weighted_sample(seeking)
 
+cat(glue::glue("Workers entering employment: {nrow(sample_workes_seeking)}\n"))
+
 sample_workers_seeking_u25 <- replacement_workers |> 
   slice_weighted_sample(seeking, under_25)
+
+cat(glue::glue("Under 25, seeking entering employment: {nrow(sample_workers_seeking_u25)}\n"))
 
 sample_workers_seeking_o25 <- replacement_workers |> 
   slice_weighted_sample(seeking, !under_25)
 
+cat(glue::glue("25 and over, seeking entering employment: {nrow(sample_workers_seeking_o25)}\n"))
+
 sample_workers_sick_or_disabled_u25 <- replacement_workers |> 
   slice_weighted_sample(sick_or_disabled, under_25)
+
+cat(glue::glue("Under 25, disabled entering employment: {nrow(sample_workers_sick_or_disabled_u25)}\n"))
 
 sample_workers_sick_or_disabled_o25 <- replacement_workers |> 
   slice_weighted_sample(sick_or_disabled, !under_25)
 
+cat(glue::glue("25 and over, disabled entering employment: {nrow(sample_workers_sick_or_disabled_o25)}\n"))
+
 uprated_pop_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking$idperson)) |> 
+  mutate(enter_employment = 0) |> 
   bind_rows(sample_workers_seeking) |> 
   arrange(idhh, idperson)
 
 uprated_seeking_u25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking_u25$idperson)) |> 
+  mutate(enter_employment = 0) |> 
   bind_rows(sample_workers_seeking_u25) |> 
   arrange(idhh, idperson)
 
 uprated_seeking_o25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking_o25$idperson)) |> 
+  mutate(enter_employment = 0) |> 
   bind_rows(sample_workers_seeking_o25) |> 
   arrange(idhh, idperson)
 
 uprated_sick_or_disabled_u25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_sick_or_disabled_u25$idperson)) |> 
+  mutate(enter_employment = 0) |> 
   bind_rows(sample_workers_sick_or_disabled_u25) |> 
   arrange(idhh, idperson)
 
 uprated_sick_or_disabled_o25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_sick_or_disabled_o25$idperson)) |> 
+  mutate(enter_employment = 0) |> 
   bind_rows(sample_workers_sick_or_disabled_o25) |> 
   arrange(idhh, idperson)
 
