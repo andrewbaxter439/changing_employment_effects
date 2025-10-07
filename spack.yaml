@@ -1,0 +1,41 @@
+spack:
+  config:
+    install_tree: $spack/opt/spack
+  view: false
+  concretization: separately
+  specs:
+    - r@4.5.2
+    - python@3.12
+    - freetype
+    - libpng
+    - libjpeg-turbo
+    - libtiff
+    - harfbuzz
+    - fontconfig
+    - cairo
+  packages:
+    all:
+      target: [x86_64]
+      compiler: [gcc]
+  modules:
+    default:
+      enable:
+        - lmod
+      lmod:
+        core_compilers:
+          - gcc
+        hierarchy:
+          - mpi
+        projections:
+          all: '{name}/{version}'
+        hash_length: 0
+        naming_scheme: '{name}/{version}'
+        include:
+          - r@4.5.2
+        exclude: []
+        blacklist_implicits: true
+        verbose: true
+        whitelist:
+          - r@4.5.2
+        suffixes:
+          r@4.5.2: r-microsim
