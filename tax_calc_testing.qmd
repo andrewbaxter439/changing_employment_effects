@@ -4,6 +4,7 @@ format:
   docx:
     toc: true
     number-sections: true
+    reference_docx: template.docx
 execute:
   echo: false
   message: false
@@ -218,10 +219,21 @@ formatted_table <- function(comparison_data) {
         currency = currency(default = "£"),
         suffixing =  c(NA, "M", NA, NA)
       )
-    )
+    ) |> 
+   tab_style(
+  style = cell_text(weight = "bold"),
+  locations = list(cells_summary())
+)
 }
 
 ```
+
+```{r read-in-numbers-employed}
+
+
+
+```
+
 
 # Estimating baseline amounts
 
@@ -265,15 +277,22 @@ baseline_amounts_calc |>
     fns = list(
       label = "Total in - out") ~-diff(.x),
     fmt = ~fmt_currency(.x, currency = currency(default = "£"), suffixing = c(NA, "M", NA, NA))
-  )
+  ) |> 
+   tab_style(
+  style = cell_text(weight = "bold"),
+  locations = list(cells_summary(), cells_grand_summary())
+)
   
 ```
 
 # Under 25 and seeking work
 
+
 ```{r under-25-seeking}
 
-read_in_pop("uprated_seeking_u25_5pc", "Under-25s - 5% increase") |> 
+under_25_seeking <- read_in_pop("uprated_seeking_u25_5pc", "Under-25s - 5% increase") 
+
+under_25_seeking |> 
   formatted_table()
 
 ```
@@ -282,7 +301,9 @@ read_in_pop("uprated_seeking_u25_5pc", "Under-25s - 5% increase") |>
 
 ```{r under-25-dlltsd}
 
-read_in_pop("uprated_sick_or_disabled_u25_5pc", "Under-25s, sick or disabled - 5% increase") |> 
+under_25_sick_or_disabled <- read_in_pop("uprated_sick_or_disabled_u25_5pc", "Under-25s, sick or disabled - 5% increase") 
+
+under_25_sick_or_disabled |> 
   formatted_table()
 
 ```
@@ -291,7 +312,9 @@ read_in_pop("uprated_sick_or_disabled_u25_5pc", "Under-25s, sick or disabled - 5
 
 ```{r over-25-seeking}
 
-read_in_pop("uprated_seeking_o25_5pc", "Aged 25-64 - 5% increase") |> 
+over_25_seeking <- read_in_pop("uprated_seeking_o25_5pc", "Aged 25-64 - 5% increase") 
+
+over_25_seeking |> 
   formatted_table()
 
 ```
@@ -300,7 +323,126 @@ read_in_pop("uprated_seeking_o25_5pc", "Aged 25-64 - 5% increase") |>
 
 ```{r over-25-dlltsd}
 
-read_in_pop("uprated_sick_or_disabled_o25_5pc", "Aged 25-64, sick or disabled - 5% increase") |> 
+over_25_sick_or_disabled <- read_in_pop("uprated_sick_or_disabled_o25_5pc", "Aged 25-64, sick or disabled - 5% increase") 
+over_25_sick_or_disabled |> 
   formatted_table()
 
 ```
+
+# All years combined
+
+```{r all-years}
+
+total_cals <- bind_rows(
+  under_25_seeking,
+  under_25_sick_or_disabled,
+  over_25_seeking,
+  over_25_sick_or_disabled
+) |> 
+  left_join(baseline_amounts_calc |>
+              select(Year, calc, gbp_base = gbp), by = join_by(Year, calc)) |> 
+  mutate(difference = gbp - gbp_base) |> 
+  separate_wider_delim(calc, delim = "__", names = c("direction", "cat")) |> 
+  summarise(difference = sum(difference), .by = c("Year", "direction", "comparison")) |> 
+  pivot_wider(names_from = c("direction"), values_from = difference) |> 
+  mutate(Total = Revenue - Expenditure) 
+
+total_cals |> 
+  pivot_wider(names_from = Year, values_from = c(Expenditure, Revenue, Total)) |> 
+  select(comparison, ends_with("2026"),
+         ends_with("2027"),
+         ends_with("2028"),
+         ends_with("2029")) |> 
+  gt(rowname_col = "comparison") |> 
+  tab_spanner_delim("_", reverse = TRUE) |> 
+  fmt_currency(currency = currency(default = "£"), decimals = 0, suffixing =  c(NA, "M", NA, NA)) |> 
+   tab_style(
+  style = cell_text(weight = "bold"),
+  locations = cells_body(
+  columns =  starts_with("Total")
+  )
+)
+
+```
+
+## Totals
+
+```{r}
+total_cals |> 
+  summarise(
+    `Total savings` = sum(Total),
+    .by = comparison) |> 
+  gt(rowname_col = "comparison")  |> 
+  fmt_currency(currency = currency(default = "£"), decimals = 0, suffixing =  c(NA, "M", NA, NA))  |>
+  grand_summary_rows(
+    fns = list(
+      label = "Total",
+      fn = "sum"
+    ),
+    fmt = ~fmt_currency(.x, currency = currency(default = "£"), suffixing = c(NA, "M", NA, NA))
+  ) |> 
+   tab_style(
+  style = cell_text(weight = "bold"),
+  locations = list(cells_grand_summary())
+)
+  
+```
+
+
+```{r graphing-pop-differences}
+
+total_cals |> 
+  pivot_longer(Expenditure:Revenue, names_to = "dir", values_to = "gbp") |> 
+  mutate(gbp = if_else(dir == "Expenditure", -gbp, gbp),
+         comparison = fct_inorder(comparison),
+         Year = fct_rev(Year)) |> 
+  ggplot(aes(gbp, Year, fill = dir)) +
+  geom_col(position = "stack") +
+  facet_wrap(~comparison, ncol = 1) + 
+  theme_minimal() + 
+  MetBrewer::scale_fill_met_d(name = "Benefits savings/\nTax income increase",
+                              palette_name = "Austria",
+                              labels = c("Benefits expenditure", "Tax Revenue")) +
+  xlab("£ saving") +
+  scale_x_continuous(labels = scales::label_currency(prefix = "£"))
+  
+```
+
+# Estimating costs
+
+```{r}
+matched_pop_in <- dir("data", pattern = "matching_updated_pop.*", full.names = TRUE) |> 
+  set_names() |> 
+  map(~read_tsv(.x, col_select = c("enter_employment", "dwt")))
+
+costs_per_person <- tribble(
+  ~age_group, ~employment_status, ~cost,
+  "Under-25", "Unemployed, looking for work", ~7000,
+  "Under-25", "Sick or disabled", ~7000,
+  "25-64", "Unemployed, looking for work", ~7000,
+  "25-64", "Sick or disabled", ~7000,
+)
+
+matched_pop_in |> 
+  map(\(dt) {
+    summarise(dt, n_entering_employment = sum(enter_employment * dwt, na.rm = TRUE))
+  }) |> 
+  imap_dfr(~tibble(population = .y, n_workers = .x$n_entering_employment)) |> 
+  mutate(
+    age_group = case_when(
+      str_detect(population, "u25") ~ "Under-25",
+      str_detect(population, "o25") ~ "25-64"
+    ),
+    employment_status = case_when(
+      str_detect(population, "seeking") ~ "Unemployed, looking for work",
+      str_detect(population, "sick_or_disabled") ~ "Sick or disabled"
+    ),
+    cost_of_program = 7000,
+    total_cost = n_workers * cost_of_program
+    ) |> 
+  filter(!is.na(age_group)) |> 
+  select(age_group, employment_status, n_workers, cost_of_program, total_cost)
+
+```
+
+
