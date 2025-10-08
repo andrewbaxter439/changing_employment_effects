@@ -124,10 +124,12 @@ find_matches <- function(unmatched_pop, matches = matches) {
   }
   
   rolling_match <- unmatched_pop |> 
-    left_join(matches) 
+    left_join(matches, relationship = "many-to-many") 
   
   matched <- rolling_match |> 
     filter(n() >=5, .by = idperson)
+  
+  cat("Matched", nrow(matched), "rows in this iteration\n")
   
   matched |> 
     bind_rows(
@@ -159,7 +161,7 @@ slice_weighted_sample <- function(data = replacement_workers, ..., prop = 0.05) 
 sample_workers_seeking <- replacement_workers |>
   slice_weighted_sample(seeking)
 
-cat(glue::glue("Workers entering employment: {nrow(sample_workes_seeking)}\n"))
+cat(glue::glue("Workers entering employment: {nrow(sample_workers_seeking)}\n"))
 
 sample_workers_seeking_u25 <- replacement_workers |> 
   slice_weighted_sample(seeking, under_25)
