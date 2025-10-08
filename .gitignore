@@ -6,7 +6,6 @@
 data/
 UKMOD*
 output/**/*
-!output/.gitkeep
 .Rdata
 .httr-oauth
 .DS_Store
