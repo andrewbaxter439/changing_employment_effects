@@ -213,10 +213,14 @@ uprated_sick_or_disabled_o25_5pc <- raw_data |>
   bind_rows(sample_workers_sick_or_disabled_o25) |> 
   arrange(idhh, idperson)
 
-write_tsv(uprated_pop_5pc, "data/matching_updated_pop_5pc.txt")
-write_tsv(uprated_seeking_u25_5pc, "data/matching_updated_pop_seeking_u25_5pc.txt")
-write_tsv(uprated_seeking_o25_5pc, "data/matching_updated_pop_seeking_o25_5pc.txt")
-write_tsv(uprated_sick_or_disabled_u25_5pc, "data/matching_updated_pop_sick_or_disabled_u25_5pc.txt")
-write_tsv(uprated_sick_or_disabled_o25_5pc, "data/matching_updated_pop_sick_or_disabled_o25_5pc.txt")
+seed_addin <- ""
+
+if ("--seed" %in% args | "-s" %in% args) seed_addin <- glue::glue("_{seed}")
+
+write_tsv(uprated_pop_5pc, glue::glue("data/matching_updated_pop_5pc{seed_addin}.txt"))
+write_tsv(uprated_seeking_u25_5pc, glue::glue("data/matching_updated_pop_seeking_u25_5pc{seed_addin}.txt"))
+write_tsv(uprated_seeking_o25_5pc, glue::glue("data/matching_updated_pop_seeking_o25_5pc{seed_addin}.txt"))
+write_tsv(uprated_sick_or_disabled_u25_5pc, glue::glue("data/matching_updated_pop_sick_or_disabled_u25_5pc{seed_addin}.txt"))
+write_tsv(uprated_sick_or_disabled_o25_5pc, glue::glue("data/matching_updated_pop_sick_or_disabled_o25_5pc{seed_addin}.txt"))
 
 
