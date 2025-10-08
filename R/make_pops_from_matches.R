@@ -143,7 +143,20 @@ output_matches <- find_matches(unmatched_pop, matches)
 
 
 replacement_workers <- output_matches |> 
-  slice_sample(n = 1, by = idperson)
+  slice_sample(n = 1, by = idperson) |> 
+  select(-c(
+      n_ch,
+      age_collapsed,
+      dms_collapsed,
+      ethnicity_collapsed,
+      deh_c3,
+      unemployed,
+      seeking,
+      sick_or_disabled,
+      under_25,
+      enter_employment
+    )
+  )
 
 ## ----create-samples------------------------------------------------------------------------------------------------------------------
 
@@ -161,27 +174,27 @@ slice_weighted_sample <- function(data = replacement_workers, ..., prop = 0.05) 
 sample_workers_seeking <- replacement_workers |>
   slice_weighted_sample(seeking)
 
-cat(glue::glue("Workers entering employment: {nrow(sample_workers_seeking)}\n"))
+cat(glue::glue("Workers entering employment: {sum(sample_workers_seeking$dwt)}"), "\n\n")
 
 sample_workers_seeking_u25 <- replacement_workers |> 
   slice_weighted_sample(seeking, under_25)
 
-cat(glue::glue("Under 25, seeking entering employment: {nrow(sample_workers_seeking_u25)}\n"))
+cat(glue::glue("Under 25, seeking entering employment: {sum(sample_workers_seeking_u25$dwt)}"), "\n\n")
 
 sample_workers_seeking_o25 <- replacement_workers |> 
   slice_weighted_sample(seeking, !under_25)
 
-cat(glue::glue("25 and over, seeking entering employment: {nrow(sample_workers_seeking_o25)}\n"))
+cat(glue::glue("25 and over, seeking entering employment: {sum(sample_workers_seeking_o25$dwt)}"), "\n\n")
 
 sample_workers_sick_or_disabled_u25 <- replacement_workers |> 
   slice_weighted_sample(sick_or_disabled, under_25)
 
-cat(glue::glue("Under 25, disabled entering employment: {nrow(sample_workers_sick_or_disabled_u25)}\n"))
+cat(glue::glue("Under 25, disabled entering employment: {sum(sample_workers_sick_or_disabled_u25$dwt)}"), "\n\n")
 
 sample_workers_sick_or_disabled_o25 <- replacement_workers |> 
   slice_weighted_sample(sick_or_disabled, !under_25)
 
-cat(glue::glue("25 and over, disabled entering employment: {nrow(sample_workers_sick_or_disabled_o25)}\n"))
+cat(glue::glue("25 and over, disabled entering employment: {sum(sample_workers_sick_or_disabled_o25$dwt)}"), "\n\n")
 
 uprated_pop_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking$idperson)) |> 
