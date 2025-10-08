@@ -29,7 +29,7 @@ euromod <- import("euromod")
 mod <- euromod$Model(here("UKMOD-PUBLIC-B2025.07"))
 
 min_year <- 2026
-max_year <- 2026
+max_year <- 2029
 
 ## ----ukmod-uprated-pop-5pc-----------------------------------------------------------------------------------------------------------
 # 
@@ -52,7 +52,7 @@ max_year <- 2026
 
 data_seeking_u25_5pc <- read_tsv(here(glue::glue("data/matching_updated_pop_seeking_u25_5pc{seed_addin}.txt")))
 
-dir_out <- glue::glue("output/uprated_seeking_u25_5pc{seed_addin}")
+dir_out <- as.character(glue::glue("output/uprated_seeking_u25_5pc{seed_addin}"))
 
 if (!dir.exists(dir_out)) dir.create(dir_out)
 
@@ -71,7 +71,7 @@ walk(min_year:max_year, \(year) {
 
 data_seeking_o25_5pc <- read_tsv(here(glue::glue("data/matching_updated_pop_seeking_o25_5pc{seed_addin}.txt")))
 
-dir_out <- glue::glue("output/uprated_seeking_o25_5pc{seed_addin}")
+dir_out <- as.character(glue::glue("output/uprated_seeking_o25_5pc{seed_addin}"))
 
 if (!dir.exists(dir_out)) dir.create(dir_out)
 
@@ -90,7 +90,7 @@ walk(min_year:max_year, \(year) {
 
 data_sick_or_disabled_u25_5pc <- read_tsv(here(glue::glue("data/matching_updated_pop_sick_or_disabled_u25_5pc{seed_addin}.txt")))
 
-dir_out <- glue::glue("output/uprated_sick_or_disabled_u25_5pc{seed_addin}")
+dir_out <- as.character(glue::glue("output/uprated_sick_or_disabled_u25_5pc{seed_addin}"))
 
 if (!dir.exists(dir_out)) dir.create(dir_out)
 
@@ -109,7 +109,7 @@ walk(min_year:max_year, \(year) {
 
 data_sick_or_disabled_o25_5pc <- read_tsv(here(glue::glue("data/matching_updated_pop_sick_or_disabled_o25_5pc{seed_addin}.txt")))
 
-dir_out <- glue::glue("output/uprated_sick_or_disabled_o25_5pc{seed_addin}")
+dir_out <- as.character(glue::glue("output/uprated_sick_or_disabled_o25_5pc{seed_addin}"))
 
 if (!dir.exists(dir_out)) dir.create(dir_out)
 
