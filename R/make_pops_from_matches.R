@@ -149,12 +149,7 @@ replacement_workers <- output_matches |>
       age_collapsed,
       dms_collapsed,
       ethnicity_collapsed,
-      deh_c3,
-      unemployed,
-      seeking,
-      sick_or_disabled,
-      under_25,
-      enter_employment
+      deh_c3
     )
   )
 
@@ -171,10 +166,10 @@ slice_weighted_sample <- function(data = replacement_workers, ..., prop = 0.05) 
   
 }
 
-sample_workers_seeking <- replacement_workers |>
-  slice_weighted_sample(seeking)
-
-cat(glue::glue("Workers entering employment: {sum(sample_workers_seeking$dwt)}"), "\n\n")
+# sample_workers_seeking <- replacement_workers |>
+#   slice_weighted_sample(seeking)
+# 
+# cat(glue::glue("Workers entering employment: {sum(sample_workers_seeking$dwt)}"), "\n\n")
 
 sample_workers_seeking_u25 <- replacement_workers |> 
   slice_weighted_sample(seeking, under_25)
@@ -196,11 +191,11 @@ sample_workers_sick_or_disabled_o25 <- replacement_workers |>
 
 cat(glue::glue("25 and over, disabled entering employment: {sum(sample_workers_sick_or_disabled_o25$dwt)}"), "\n\n")
 
-uprated_pop_5pc <- raw_data |> 
-  filter(!(idperson %in% sample_workers_seeking$idperson)) |> 
-  mutate(enter_employment = 0) |> 
-  bind_rows(sample_workers_seeking) |> 
-  arrange(idhh, idperson)
+# uprated_pop_5pc <- raw_data |> 
+#   filter(!(idperson %in% sample_workers_seeking$idperson)) |> 
+#   mutate(enter_employment = 0) |> 
+#   bind_rows(sample_workers_seeking) |> 
+#   arrange(idhh, idperson)
 
 uprated_seeking_u25_5pc <- raw_data |> 
   filter(!(idperson %in% sample_workers_seeking_u25$idperson)) |> 
@@ -230,7 +225,7 @@ seed_addin <- ""
 
 if ("--seed" %in% args | "-s" %in% args) seed_addin <- glue::glue("_{seed}")
 
-write_tsv(uprated_pop_5pc, glue::glue("data/matching_updated_pop_5pc{seed_addin}.txt"))
+# write_tsv(uprated_pop_5pc, glue::glue("data/matching_updated_pop_5pc{seed_addin}.txt"))
 write_tsv(uprated_seeking_u25_5pc, glue::glue("data/matching_updated_pop_seeking_u25_5pc{seed_addin}.txt"))
 write_tsv(uprated_seeking_o25_5pc, glue::glue("data/matching_updated_pop_seeking_o25_5pc{seed_addin}.txt"))
 write_tsv(uprated_sick_or_disabled_u25_5pc, glue::glue("data/matching_updated_pop_sick_or_disabled_u25_5pc{seed_addin}.txt"))
