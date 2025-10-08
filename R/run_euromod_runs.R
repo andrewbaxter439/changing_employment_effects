@@ -24,7 +24,7 @@ library(here)
 
 euromod <- import("euromod")
 
-unzip("UKMOD-PUBLIC-B2025.07.zip")
+# unzip("UKMOD-PUBLIC-B2025.07.zip")
 
 mod <- euromod$Model(here("UKMOD-PUBLIC-B2025.07"))
 
