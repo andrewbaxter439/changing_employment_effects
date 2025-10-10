@@ -17,6 +17,11 @@ execute:
 library(tidyverse)
 library(gt)
 
+#' First, run:
+#' - 'R/install_and_setup.R'
+#' - 'R/make_pops_from_propensity.R'
+#' - 'R/run_euromod_runs.R'
+
 # Read in labels
 statistics_page <- xml2::read_xml("UKMOD-PUBLIC-B2025.07/Statistics Presenter/UKMOD_1default.xml") 
   

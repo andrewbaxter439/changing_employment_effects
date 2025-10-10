@@ -8,6 +8,8 @@ format: html
 #| echo: false
 #| include: false
 
+#' First, run 'R/install_and_setup.R'
+
 here::here("increasing_employment_rates.qmd")
 
 library(reticulate)
