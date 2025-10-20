@@ -13,3 +13,4 @@ output/**/*
 *_files/
 *.html
 *.docx
+!template.docx
