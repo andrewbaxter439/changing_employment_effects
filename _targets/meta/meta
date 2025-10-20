@@ -2,9 +2,9 @@ name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iterat
 ukmod_setup|stem|8a9fdcfc7cc50185|18c1155c1b1540e5|3b40e6799785bc0f|1442376965||t20381.3473222529s|s74b|74|rds|local|vector|||18.85||
 input_pops_file|stem|5b6921fd1cd1abe6|9cc85a3d80a4e1e5|2c530c1562a7fbd1|-1593047586|data/UK_2023_b1.txt|t20357.4239138834s|s63883343b|63883343|file|local|vector|||0.16||
 match_pops|stem|9601f8d7c2e6f199|8cb82d4b2bebf8cc|3d6d5ac35bf54c39|47084553||t20381.3597511707s|s73b|73|rds|local|vector|||23.03||
-output_report|stem|da6ca5586e46b499|e4fd74861233fc7b|78b8ec601e7d3753|36998438|estimating_the_impacts_of_changing_rates.html*estimating_the_impacts_of_changing_rates.qmd|t20381.3658488624s|s835106b|835106|file|local|vector|||74.39||
+run_models|stem|6030f72b7acef4d1|47feaece42225468|a73ee1fd5c0aae00|495904324||t20381.4156639834s|s48b|48|rds|local|vector|||1826.93||
 install_and_setup|function|ae03afbee182ac9a
 make_pops_from_propensity|function|d04d5e1360aef968
 make_pops_from_matches|function|efed9ea06efc0cc3
 run_euromod|function|8f720d98b0c68602
-run_models|stem|6030f72b7acef4d1|47feaece42225468|a73ee1fd5c0aae00|495904324||t20381.4156639834s|s48b|48|rds|local|vector|||1826.93||
+output_report|stem|82d9b6e9f38d486b|2b66626095d38c6d|78b8ec601e7d3753|36998438|estimating_the_impacts_of_changing_rates.docx*estimating_the_impacts_of_changing_rates.qmd|t20381.616198072s|s318098b|318098|file|local|vector|||131.14||

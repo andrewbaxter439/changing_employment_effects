@@ -33,6 +33,9 @@ list(
   ),
   tar_render(
     output_report,
-    "estimating_the_impacts_of_changing_rates.qmd"
+    "estimating_the_impacts_of_changing_rates.qmd",
+    output_format = rmarkdown::word_document(reference_docx = "template.docx", toc = TRUE,
+                                             number_sections = TRUE)
+    
   )
 )
