@@ -55,6 +55,10 @@ jobs:
           sudo apt-get install libcurl4-openssl-dev
           sudo apt-get install libssl-dev
           sudo apt-get install libzmq3-dev
+          sudo apt-get install libpng-dev
+          
+      - name: Decrypt data file
+        run: 'gpg --batch --pasphrase ${{ secrets.ENCRYPT_KEY }} --output data/UK_2023_b1.txt --decrypt data/UK_2023_b1.txt.gpg'
 
       - name: Cache packages
         uses: actions/cache@v4
@@ -81,9 +85,6 @@ jobs:
           ref: targets-runs
           fetch-depth: 1
           path: .targets-runs
-          
-      - name: Decrypt data file
-        run: 'gpg --batch --pasphrase ${{ secrets.ENCRYPT_KEY }} --output data/UK_2023_b1.txt --decrypt data/UK_2023_b1.txt.gpg'
 
       - name: Restore output files from the previous run
         if: steps.runs-exist.outcome == 'success'
