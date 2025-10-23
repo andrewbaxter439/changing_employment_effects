@@ -3,7 +3,7 @@
 .RData
 .Ruserdata
 
-data/
+data/*
 UKMOD*
 output/**/*
 .Rdata
@@ -13,3 +13,5 @@ output/**/*
 *_files/
 *.html
 *.docx
+!template.docx
+!data/UK_2023_b1.txt.gpg

@@ -14,6 +14,9 @@ execute:
 ```{r, setup}
 #| echo: false
 
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(tidyverse.quiet = TRUE)
+
 library(tidyverse)
 library(gt)
 
@@ -21,6 +24,8 @@ library(gt)
 #' - 'R/install_and_setup.R'
 #' - 'R/make_pops_from_propensity.R'
 #' - 'R/run_euromod_runs.R'
+
+run <- tar_read(run_models)
 
 # Read in labels
 statistics_page <- xml2::read_xml("UKMOD-PUBLIC-B2025.07/Statistics Presenter/UKMOD_1default.xml") 
