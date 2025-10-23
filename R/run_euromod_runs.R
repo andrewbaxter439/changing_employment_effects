@@ -15,7 +15,7 @@ run_euromod <- function(seed = NULL, min_year = 2026, max_year = 2026, match_fil
   library(tidyverse)
   library(here)
   
-  source_python("py/init_dotnet.py")
+  # source_python("py/init_dotnet.py")
   
   euromod <- import("euromod")
   
